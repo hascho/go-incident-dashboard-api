@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hascho/go-incident-dashboard-api/internal/db"
 	"github.com/hascho/go-incident-dashboard-api/internal/handler"
 	"github.com/hascho/go-incident-dashboard-api/internal/middleware"
 	"github.com/rs/zerolog"
@@ -13,6 +14,16 @@ import (
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	dbURL := "postgres://user:password@localhost:5432/incidentdb?sslmode=disable"
+	dbConfig := db.Config{URL: dbURL}
+	dbConn, err := db.NewPostgresDB(dbConfig)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to connect to database")
+	}
+	defer dbConn.Close() // ensure the connection is closed when main exits
+
+	logger.Info().Msg("Database connection pool established successfully")
 
 	r := gin.New()
 
