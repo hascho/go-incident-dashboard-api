@@ -105,3 +105,30 @@ func (h *IncidentHandler) CreateIncident(c *gin.Context) {
 	logger.Info().Str("incident_id", createdIncident.ID).Msg("Incident created successfully")
 	c.JSON(http.StatusCreated, response)
 }
+
+func (h *IncidentHandler) GetAllIncidents(c *gin.Context) {
+	logger := middleware.GetLogger(c.Request.Context())
+
+	incidents, err := h.Service.GetAllIncidents(c.Request.Context())
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list incidents")
+		c.JSON(http.StatusInternalServerError, model.ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "Failed to retrieve incident list",
+		})
+		return
+	}
+
+	response := make([]model.IncidentResponse, len(incidents))
+	for i, incident := range incidents {
+		response[i] = model.IncidentResponse{
+			ID:       incident.ID,
+			Title:    incident.Title,
+			Status:   incident.Status,
+			Severity: incident.Severity,
+			Team:     incident.Team,
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
+}

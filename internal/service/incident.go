@@ -10,6 +10,7 @@ import (
 type IncidentService interface {
 	CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
 	GetIncidentByID(ctx context.Context, id string) (*model.Incident, error)
+	GetAllIncidents(ctx context.Context) ([]*model.Incident, error)
 }
 
 type incidentService struct {
@@ -27,4 +28,8 @@ func (s *incidentService) CreateIncident(ctx context.Context, incident *model.In
 
 func (s *incidentService) GetIncidentByID(ctx context.Context, id string) (*model.Incident, error) {
 	return s.Repo.GetIncidentByID(ctx, id)
+}
+
+func (s *incidentService) GetAllIncidents(ctx context.Context) ([]*model.Incident, error) {
+	return s.Repo.GetAllIncidents(ctx)
 }

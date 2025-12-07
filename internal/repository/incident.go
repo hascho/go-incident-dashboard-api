@@ -12,6 +12,7 @@ import (
 type IncidentRepository interface {
 	CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
 	GetIncidentByID(ctx context.Context, id string) (*model.Incident, error)
+	GetAllIncidents(ctx context.Context) ([]*model.Incident, error)
 }
 
 type incidentRepository struct {
@@ -68,4 +69,43 @@ func (r *incidentRepository) GetIncidentByID(ctx context.Context, id string) (*m
 	}
 
 	return incident, nil
+}
+
+func (r *incidentRepository) GetAllIncidents(ctx context.Context) ([]*model.Incident, error) {
+	query := `
+		SELECT id, title, description, status, severity, team, created_at, updated_at
+		FROM incidents
+		ORDER BY created_at DESC`
+
+	rows, err := r.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("repository: failed to query incidents: %w", err)
+	}
+	defer rows.Close()
+
+	incidents := make([]*model.Incident, 0)
+
+	for rows.Next() {
+		incident := &model.Incident{}
+		err := rows.Scan(
+			&incident.ID,
+			&incident.Title,
+			&incident.Description,
+			&incident.Status,
+			&incident.Severity,
+			&incident.Team,
+			&incident.CreatedAt,
+			&incident.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("repository: failed to scan incident row: %w", err)
+		}
+		incidents = append(incidents, incident)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: rows iteration error: %w", err)
+	}
+
+	return incidents, nil
 }
