@@ -9,6 +9,7 @@ import (
 
 type IncidentService interface {
 	CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
+	GetIncidentByID(ctx context.Context, id string) (*model.Incident, error)
 }
 
 type incidentService struct {
@@ -21,6 +22,9 @@ func NewIncidentService(repo repository.IncidentRepository) IncidentService {
 
 func (s *incidentService) CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error) {
 	// todo add business logic here
-
 	return s.Repo.CreateIncident(ctx, incident)
+}
+
+func (s *incidentService) GetIncidentByID(ctx context.Context, id string) (*model.Incident, error) {
+	return s.Repo.GetIncidentByID(ctx, id)
 }

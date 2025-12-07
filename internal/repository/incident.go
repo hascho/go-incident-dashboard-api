@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/hascho/go-incident-dashboard-api/internal/model"
@@ -10,6 +11,7 @@ import (
 
 type IncidentRepository interface {
 	CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
+	GetIncidentByID(ctx context.Context, id string) (*model.Incident, error)
 }
 
 type incidentRepository struct {
@@ -38,5 +40,32 @@ func (r *incidentRepository) CreateIncident(ctx context.Context, incident *model
 		return nil, fmt.Errorf("repository: failed to create incident: %w", err)
 	}
 	// return the incident struct, now populated with the database-generated fields (ID, dates)
+	return incident, nil
+}
+
+func (r *incidentRepository) GetIncidentByID(ctx context.Context, id string) (*model.Incident, error) {
+	query := `
+		SELECT id, title, description, status, severity, team, created_at, updated_at
+		FROM incidents
+		WHERE id = $1`
+
+	incident := &model.Incident{}
+	err := r.DB.QueryRowContext(ctx, query, id).Scan(
+		&incident.ID,
+		&incident.Title,
+		&incident.Description,
+		&incident.Status,
+		&incident.Severity,
+		&incident.Team,
+		&incident.CreatedAt,
+		&incident.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("repository: failed to get incident %s: %w", id, err)
+	}
+
 	return incident, nil
 }

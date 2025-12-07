@@ -1,14 +1,16 @@
 package handler
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/hascho/go-incident-dashboard-api/internal/middleware"
 	"github.com/hascho/go-incident-dashboard-api/internal/model"
 	"github.com/hascho/go-incident-dashboard-api/internal/service"
-	"github.com/hascho/go-incident-dashboard-api/internal/util"
 )
 
 type IncidentHandler struct {
@@ -20,31 +22,43 @@ func NewIncidentHandler(svc service.IncidentService) *IncidentHandler {
 }
 
 func (h *IncidentHandler) GetIncidentByID(c *gin.Context) {
-	incidentID := c.Param("incidentID")
 	logger := middleware.GetLogger(c.Request.Context())
+	incidentID := c.Param("id")
 
-	if incidentID == "not-found" {
-		apiErr := util.NewNotFoundError(fmt.Sprintf("Incident with ID %s not found.", incidentID))
-		logger.Error().Str("incident_id", incidentID).Msg(apiErr.Error())
-
-		c.JSON(apiErr.StatusCode, model.ErrorResponse{
-			Code:    apiErr.StatusCode,
-			Message: apiErr.Message,
+	if _, err := uuid.Parse(incidentID); err != nil {
+		logger.Warn().Str("incident_id", incidentID).Msg("Received malformed incident ID")
+		c.JSON(http.StatusBadRequest, model.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Incident ID '%s' is not a valid UUID format.", incidentID),
 		})
 		return
 	}
 
-	logger.Info().
-		Str("component", "handler").
-		Str("incident_id", incidentID).
-		Msg("Context-aware log test")
+	incident, err := h.Service.GetIncidentByID(c.Request.Context(), incidentID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			logger.Warn().Str("incident_id", incidentID).Msg("Incident not found")
+			c.JSON(http.StatusNotFound, model.ErrorResponse{
+				Code:    http.StatusNotFound,
+				Message: fmt.Sprintf("Incident with ID %s not found", incidentID),
+			})
+			return
+		}
+
+		logger.Error().Err(err).Msg("Failed to retrieve incident")
+		c.JSON(http.StatusInternalServerError, model.ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "Internal server error",
+		})
+		return
+	}
 
 	response := model.IncidentResponse{
 		ID:       incidentID,
-		Title:    "DB Error on Prod Cluster",
-		Status:   "Acknowledged",
-		Severity: "Critical",
-		Team:     "SRE",
+		Title:    incident.ID,
+		Status:   incident.Status,
+		Severity: incident.Severity,
+		Team:     incident.Team,
 	}
 
 	c.JSON(http.StatusOK, response)

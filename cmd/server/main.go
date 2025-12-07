@@ -37,7 +37,7 @@ func main() {
 	incidentService := service.NewIncidentService(incidentRepo)
 	incidentHandler := handler.NewIncidentHandler(incidentService)
 
-	r.GET("/incidents/:incidentID", incidentHandler.GetIncidentByID)
+	r.GET("/incidents/:id", incidentHandler.GetIncidentByID)
 
 	r.POST("/incidents", incidentHandler.CreateIncident)
 
