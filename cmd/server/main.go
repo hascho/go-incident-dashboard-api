@@ -8,6 +8,8 @@ import (
 	"github.com/hascho/go-incident-dashboard-api/internal/db"
 	"github.com/hascho/go-incident-dashboard-api/internal/handler"
 	"github.com/hascho/go-incident-dashboard-api/internal/middleware"
+	"github.com/hascho/go-incident-dashboard-api/internal/repository"
+	"github.com/hascho/go-incident-dashboard-api/internal/service"
 	"github.com/rs/zerolog"
 )
 
@@ -31,9 +33,13 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.LoggerMiddleware(logger))
 
-	incidentHandler := handler.NewIncidentHandler()
+	incidentRepo := repository.NewIncidentRepository(dbConn)
+	incidentService := service.NewIncidentService(incidentRepo)
+	incidentHandler := handler.NewIncidentHandler(incidentService)
 
 	r.GET("/incidents/:incidentID", incidentHandler.GetIncidentByID)
+
+	r.POST("/incidents", incidentHandler.CreateIncident)
 
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "API is operational"})
