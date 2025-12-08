@@ -14,6 +14,7 @@ type IncidentRepository interface {
 	GetIncidentByID(ctx context.Context, id string) (*model.Incident, error)
 	GetAllIncidents(ctx context.Context) ([]*model.Incident, error)
 	UpdateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
+	DeleteIncident(ctx context.Context, id string) error
 }
 
 type incidentRepository struct {
@@ -139,4 +140,25 @@ func (r *incidentRepository) UpdateIncident(ctx context.Context, incident *model
 	}
 
 	return updatedIncident, nil
+}
+
+func (r *incidentRepository) DeleteIncident(ctx context.Context, id string) error {
+	query := `DELETE FROM incidents WHERE id = $1`
+
+	res, err := r.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("repository: failed to delete incident %s: %w", id, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("repository: failed to check rows affected: %w", err)
+	}
+
+	// rowsAffected is 0 when the ID did not exist
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
 }

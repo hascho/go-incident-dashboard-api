@@ -12,6 +12,7 @@ type IncidentService interface {
 	GetIncidentByID(ctx context.Context, id string) (*model.Incident, error)
 	GetAllIncidents(ctx context.Context) ([]*model.Incident, error)
 	UpdateIncident(ctx context.Context, incidentID string, req model.UpdateIncidentRequest) (*model.Incident, error)
+	DeleteIncident(ctx context.Context, incidentID string) error
 }
 
 type incidentService struct {
@@ -49,4 +50,8 @@ func (s *incidentService) UpdateIncident(ctx context.Context, incidentID string,
 	}
 
 	return s.Repo.UpdateIncident(ctx, existingIncident)
+}
+
+func (s *incidentService) DeleteIncident(ctx context.Context, incidentID string) error {
+	return s.Repo.DeleteIncident(ctx, incidentID)
 }

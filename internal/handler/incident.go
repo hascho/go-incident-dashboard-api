@@ -181,3 +181,35 @@ func (h *IncidentHandler) PatchIncident(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *IncidentHandler) DeleteIncident(c *gin.Context) {
+	logger := middleware.GetLogger(c.Request.Context())
+	incidentID := c.Param("id")
+
+	if _, err := uuid.Parse(incidentID); err != nil {
+		c.JSON(http.StatusBadRequest, model.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Incident ID '%s' is not a valid UUID format.", incidentID),
+		})
+		return
+	}
+
+	if err := h.Service.DeleteIncident(c.Request.Context(), incidentID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, model.ErrorResponse{
+				Code:    http.StatusNotFound,
+				Message: fmt.Sprintf("Incident with ID %s not found", incidentID),
+			})
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to delete incident")
+		c.JSON(http.StatusInternalServerError, model.ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "Internal server error during deletion.",
+		})
+		return
+	}
+
+	logger.Info().Str("incident_id", incidentID).Msg("Incident deleted successfully")
+	c.Status(http.StatusNoContent)
+}
