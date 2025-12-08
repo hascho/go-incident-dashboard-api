@@ -132,3 +132,52 @@ func (h *IncidentHandler) GetAllIncidents(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *IncidentHandler) PatchIncident(c *gin.Context) {
+	logger := middleware.GetLogger(c.Request.Context())
+	incidentID := c.Param("id")
+
+	if _, err := uuid.Parse(incidentID); err != nil {
+		c.JSON(http.StatusBadRequest, model.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Incident ID '%s' is not a valid UUID format.", incidentID),
+		})
+		return
+	}
+
+	var req model.UpdateIncidentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: fmt.Sprintf("Invalid request payload: %v", err.Error()),
+		})
+		return
+	}
+
+	updatedIncident, err := h.Service.UpdateIncident(c.Request.Context(), incidentID, req)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, model.ErrorResponse{
+				Code:    http.StatusNotFound,
+				Message: fmt.Sprintf("Incident with ID %s not found", incidentID),
+			})
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to update incident")
+		c.JSON(http.StatusInternalServerError, model.ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "Internal server error during update.",
+		})
+		return
+	}
+
+	response := model.IncidentResponse{
+		ID:       updatedIncident.ID,
+		Title:    updatedIncident.Title,
+		Status:   updatedIncident.Status,
+		Severity: updatedIncident.Severity,
+		Team:     updatedIncident.Team,
+	}
+
+	c.JSON(http.StatusOK, response)
+}

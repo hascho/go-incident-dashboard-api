@@ -27,3 +27,8 @@ type IncidentResponse struct {
 	Severity string `json:"severity"`
 	Team     string `json:"team"`
 }
+
+type UpdateIncidentRequest struct {
+	Status      *string `json:"status"`
+	Description *string `json:"description"`
+}

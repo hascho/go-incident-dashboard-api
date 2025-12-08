@@ -11,6 +11,7 @@ type IncidentService interface {
 	CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
 	GetIncidentByID(ctx context.Context, id string) (*model.Incident, error)
 	GetAllIncidents(ctx context.Context) ([]*model.Incident, error)
+	UpdateIncident(ctx context.Context, incidentID string, req model.UpdateIncidentRequest) (*model.Incident, error)
 }
 
 type incidentService struct {
@@ -32,4 +33,20 @@ func (s *incidentService) GetIncidentByID(ctx context.Context, id string) (*mode
 
 func (s *incidentService) GetAllIncidents(ctx context.Context) ([]*model.Incident, error) {
 	return s.Repo.GetAllIncidents(ctx)
+}
+
+func (s *incidentService) UpdateIncident(ctx context.Context, incidentID string, req model.UpdateIncidentRequest) (*model.Incident, error) {
+	existingIncident, err := s.Repo.GetIncidentByID(ctx, incidentID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Status != nil {
+		existingIncident.Status = *req.Status
+	}
+	if req.Description != nil {
+		existingIncident.Description = *req.Description
+	}
+
+	return s.Repo.UpdateIncident(ctx, existingIncident)
 }

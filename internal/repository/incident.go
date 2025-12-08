@@ -13,6 +13,7 @@ type IncidentRepository interface {
 	CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
 	GetIncidentByID(ctx context.Context, id string) (*model.Incident, error)
 	GetAllIncidents(ctx context.Context) ([]*model.Incident, error)
+	UpdateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
 }
 
 type incidentRepository struct {
@@ -108,4 +109,34 @@ func (r *incidentRepository) GetAllIncidents(ctx context.Context) ([]*model.Inci
 	}
 
 	return incidents, nil
+}
+
+func (r *incidentRepository) UpdateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error) {
+	query := `
+		UPDATE incidents
+		SET status = $2, description = $3, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, title, description, status, severity, team, created_at, updated_at`
+
+	updatedIncident := &model.Incident{}
+
+	err := r.DB.QueryRowContext(ctx, query, incident.ID, incident.Status, incident.Description).Scan(
+		&updatedIncident.ID,
+		&updatedIncident.Title,
+		&updatedIncident.Description,
+		&updatedIncident.Status,
+		&updatedIncident.Severity,
+		&updatedIncident.Team,
+		&updatedIncident.CreatedAt,
+		&updatedIncident.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("repository: failed to update incident %s: %w", incident.ID, err)
+	}
+
+	return updatedIncident, nil
 }

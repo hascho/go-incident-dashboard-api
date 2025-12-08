@@ -40,6 +40,7 @@ func main() {
 	r.GET("/incidents", incidentHandler.GetAllIncidents)
 	r.GET("/incidents/:id", incidentHandler.GetIncidentByID)
 	r.POST("/incidents", incidentHandler.CreateIncident)
+	r.PATCH("/incidents/:id", incidentHandler.PatchIncident)
 
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "API is operational"})
