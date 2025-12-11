@@ -5,6 +5,8 @@ import (
 
 	"github.com/hascho/go-incident-dashboard-api/internal/model"
 	"github.com/hascho/go-incident-dashboard-api/internal/repository"
+	"github.com/hascho/go-incident-dashboard-api/internal/worker"
+	"github.com/rs/zerolog"
 )
 
 type IncidentService interface {
@@ -16,16 +18,32 @@ type IncidentService interface {
 }
 
 type incidentService struct {
-	Repo repository.IncidentRepository
+	Repo         repository.IncidentRepository
+	Logger       zerolog.Logger
+	JobProcessor *worker.JobProcessor
 }
 
-func NewIncidentService(repo repository.IncidentRepository) IncidentService {
-	return &incidentService{Repo: repo}
+func NewIncidentService(repo repository.IncidentRepository, logger zerolog.Logger, jp *worker.JobProcessor) IncidentService {
+	return &incidentService{Repo: repo, Logger: logger, JobProcessor: jp}
 }
 
 func (s *incidentService) CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error) {
-	// todo add business logic here
-	return s.Repo.CreateIncident(ctx, incident)
+	createdIncident, err := s.Repo.CreateIncident(ctx, incident)
+	if err != nil {
+		return nil, err
+	}
+
+	job := worker.Job{
+		Incident: createdIncident,
+		Logger:   s.Logger,
+	}
+
+	// send the job to the buffered channel.
+	// if the channel buffer (1000 slots) is full, this line will BLOCK the HTTP request
+	// until a worker finishes a job. This is the Backpressure mechanism.
+	s.JobProcessor.JobQueue <- job
+
+	return createdIncident, nil
 }
 
 func (s *incidentService) GetIncidentByID(ctx context.Context, id string) (*model.Incident, error) {
