@@ -5,7 +5,6 @@ import (
 
 	"github.com/hascho/go-incident-dashboard-api/internal/model"
 	"github.com/hascho/go-incident-dashboard-api/internal/repository"
-	"github.com/hascho/go-incident-dashboard-api/internal/worker"
 	"github.com/rs/zerolog"
 )
 
@@ -18,13 +17,13 @@ type IncidentService interface {
 }
 
 type incidentService struct {
-	Repo         repository.IncidentRepository
-	Logger       zerolog.Logger
-	JobProcessor *worker.JobProcessor
+	Repo    repository.IncidentRepository
+	Logger  zerolog.Logger
+	JobRepo repository.JobRepository
 }
 
-func NewIncidentService(repo repository.IncidentRepository, logger zerolog.Logger, jp *worker.JobProcessor) IncidentService {
-	return &incidentService{Repo: repo, Logger: logger, JobProcessor: jp}
+func NewIncidentService(repo repository.IncidentRepository, logger zerolog.Logger, jobRepo repository.JobRepository) IncidentService {
+	return &incidentService{Repo: repo, Logger: logger, JobRepo: jobRepo}
 }
 
 func (s *incidentService) CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error) {
@@ -33,15 +32,10 @@ func (s *incidentService) CreateIncident(ctx context.Context, incident *model.In
 		return nil, err
 	}
 
-	job := worker.Job{
-		Incident: createdIncident,
-		Logger:   s.Logger,
+	if err := s.JobRepo.CreateJob(ctx, createdIncident); err != nil {
+		// Log the failure but do NOT fail the HTTP request
+		s.Logger.Error().Err(err).Msg("Failed to create job entry for notification. Incident created but notification is missing.")
 	}
-
-	// send the job to the buffered channel.
-	// if the channel buffer (1000 slots) is full, this line will BLOCK the HTTP request
-	// until a worker finishes a job. This is the Backpressure mechanism.
-	s.JobProcessor.JobQueue <- job
 
 	return createdIncident, nil
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/hascho/go-incident-dashboard-api/internal/middleware"
 	"github.com/hascho/go-incident-dashboard-api/internal/repository"
 	"github.com/hascho/go-incident-dashboard-api/internal/service"
-	"github.com/hascho/go-incident-dashboard-api/internal/worker"
+
 	"github.com/rs/zerolog"
 )
 
@@ -22,7 +22,7 @@ func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
-	dbURL := "postgres://user:password@localhost:5432/incidentdb?sslmode=disable"
+	dbURL := "postgres://user:password@127.0.0.1:5432/incidentdb?sslmode=disable"
 	dbConfig := db.Config{URL: dbURL}
 	dbConn, err := db.NewPostgresDB(dbConfig)
 	if err != nil {
@@ -38,12 +38,10 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.LoggerMiddleware(logger))
 
-	jobProcessor := worker.NewJobProcessor(logger)
-	workerCtx, workerCancel := context.WithCancel(context.Background())
-	jobProcessor.Start(workerCtx) // start the 5 worker Goroutines
-
 	incidentRepo := repository.NewIncidentRepository(dbConn)
-	incidentService := service.NewIncidentService(incidentRepo, logger, jobProcessor)
+	jobRepo := repository.NewJobRepository(dbConn)
+
+	incidentService := service.NewIncidentService(incidentRepo, logger, jobRepo)
 	incidentHandler := handler.NewIncidentHandler(incidentService)
 
 	r.GET("/incidents", incidentHandler.GetAllIncidents)
@@ -58,7 +56,6 @@ func main() {
 
 	logger.Info().Str("port", "8080").Msg("Server starting")
 
-	// r.Run(":8080")
 	srv := &http.Server{
 		Addr:    ":8080",
 		Handler: r,
@@ -83,16 +80,6 @@ func main() {
 	if err := srv.Shutdown(httpCtx); err != nil {
 		logger.Fatal().Err(err).Msg("HTTP Server forced to shutdown")
 	}
-
-	// stop accepting new jobs for the worker pool
-	// closes the JobQueue channel, allowing workers to drain any jobs currently in the buffer.
-	jobProcessor.Stop()
-
-	// send cancellation signal to all workers
-	workerCancel()
-
-	logger.Info().Msg("Waiting for workers to drain queue and exit...")
-	jobProcessor.Wait() // wait blocks until all workers call wg.Done()
 
 	logger.Info().Msg("Server exiting.")
 }
