@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/hascho/go-incident-dashboard-api/internal/repository"
@@ -43,16 +45,38 @@ func (w *NotificationWorker) ProcessNextBatch(ctx context.Context) {
 func (w *NotificationWorker) processJob(ctx context.Context, job *repository.Job) {
 	w.Logger.Info().Interface("job_id", job.ID).Msg("Processing job...")
 
-	// --- SIMULATING WORK ---
-	// In a real app, this is where we would call SendGrid, Twilio, or Slack.
-	time.Sleep(1 * time.Second)
-	// -----------------------
+	err := w.sendNotification(job)
+	if err != nil {
+		w.Logger.Warn().Err(err).Interface("job_id", job.ID).Msg("Notification failed, attempting retry logic")
 
-	err := w.Repo.UpdateJobStatus(ctx, job.ID, "SUCCESS")
+		// This will increment retries and move status to FAILED or PERMANENTLY_FAILED
+		retryErr := w.Repo.FailJobWithRetry(ctx, job.ID, 3)
+		if retryErr != nil {
+			w.Logger.Error().Err(retryErr).Msg("Critical: Could not update failure status in database")
+		}
+		return
+	}
+
+	err = w.Repo.UpdateJobStatus(ctx, job.ID, "SUCCESS")
 	if err != nil {
 		w.Logger.Error().Err(err).Interface("job_id", job.ID).Msg("Failed to update job status to SUCCESS")
 		return
 	}
 
 	w.Logger.Info().Interface("job_id", job.ID).Msg("Successfully processed notification")
+}
+
+// Helper to simulate real work that might fail
+func (w *NotificationWorker) sendNotification(job *repository.Job) error {
+	// Simulate processing time
+	time.Sleep(500 * time.Millisecond)
+
+	var payload map[string]interface{}
+	importJsonErr := json.Unmarshal(job.Payload, &payload)
+
+	if importJsonErr == nil && payload["title"] == "FAIL" {
+		return fmt.Errorf("simulated provider downtime")
+	}
+
+	return nil
 }
