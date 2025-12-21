@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/hascho/go-incident-dashboard-api/internal/model"
+	"github.com/hascho/go-incident-dashboard-api/internal/queue"
 	"github.com/hascho/go-incident-dashboard-api/internal/repository"
 	"github.com/rs/zerolog"
 )
@@ -20,10 +21,16 @@ type incidentService struct {
 	Repo    repository.IncidentRepository
 	Logger  zerolog.Logger
 	JobRepo repository.JobRepository
+	Queue   queue.TaskQueue
 }
 
-func NewIncidentService(repo repository.IncidentRepository, logger zerolog.Logger, jobRepo repository.JobRepository) IncidentService {
-	return &incidentService{Repo: repo, Logger: logger, JobRepo: jobRepo}
+func NewIncidentService(repo repository.IncidentRepository, logger zerolog.Logger, jobRepo repository.JobRepository, q queue.TaskQueue) IncidentService {
+	return &incidentService{
+		Repo:    repo,
+		Logger:  logger,
+		JobRepo: jobRepo,
+		Queue:   q,
+	}
 }
 
 func (s *incidentService) CreateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error) {
@@ -35,6 +42,13 @@ func (s *incidentService) CreateIncident(ctx context.Context, incident *model.In
 	if err := s.JobRepo.CreateJob(ctx, createdIncident); err != nil {
 		// Log the failure but do NOT fail the HTTP request
 		s.Logger.Error().Err(err).Msg("Failed to create job entry for notification. Incident created but notification is missing.")
+	}
+
+	if err := s.Queue.Publish(ctx, createdIncident.ID); err != nil {
+		// if Redis is down, it's okay! polling will catch it.
+		s.Logger.Warn().Err(err).Msg("Redis publish failed - worker will catch up via polling")
+	} else {
+		s.Logger.Info().Str("incident_id", createdIncident.ID).Msg("Published job to Redis")
 	}
 
 	return createdIncident, nil

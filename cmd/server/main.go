@@ -12,6 +12,7 @@ import (
 	"github.com/hascho/go-incident-dashboard-api/internal/db"
 	"github.com/hascho/go-incident-dashboard-api/internal/handler"
 	"github.com/hascho/go-incident-dashboard-api/internal/middleware"
+	"github.com/hascho/go-incident-dashboard-api/internal/queue"
 	"github.com/hascho/go-incident-dashboard-api/internal/repository"
 	"github.com/hascho/go-incident-dashboard-api/internal/service"
 
@@ -32,8 +33,10 @@ func main() {
 
 	logger.Info().Msg("Database connection pool established successfully")
 
-	r := gin.New()
+	taskQueue := queue.NewRedisQueue("localhost:6379", "", 0)
+	logger.Info().Msg("Redis connection established")
 
+	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.RequestID())
 	r.Use(middleware.LoggerMiddleware(logger))
@@ -41,7 +44,7 @@ func main() {
 	incidentRepo := repository.NewIncidentRepository(dbConn)
 	jobRepo := repository.NewJobRepository(dbConn)
 
-	incidentService := service.NewIncidentService(incidentRepo, logger, jobRepo)
+	incidentService := service.NewIncidentService(incidentRepo, logger, jobRepo, taskQueue)
 	incidentHandler := handler.NewIncidentHandler(incidentService)
 
 	r.GET("/incidents", incidentHandler.GetAllIncidents)

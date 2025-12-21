@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hascho/go-incident-dashboard-api/internal/db"
+	"github.com/hascho/go-incident-dashboard-api/internal/queue"
 	"github.com/hascho/go-incident-dashboard-api/internal/repository"
 	"github.com/hascho/go-incident-dashboard-api/internal/worker"
 	"github.com/rs/zerolog"
@@ -24,8 +25,11 @@ func main() {
 	}
 	defer dbConn.Close()
 
+	taskQueue := queue.NewRedisQueue("localhost:6379", "", 0)
+	logger.Info().Msg("Worker connected to Redis")
+
 	jobRepo := repository.NewJobRepository(dbConn)
-	notificationWorker := worker.NewNotificationWorker(jobRepo, logger, "worker-01")
+	notificationWorker := worker.NewNotificationWorker(jobRepo, taskQueue, logger, "worker-01")
 
 	// The Heartbeat (Polling Loop)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -35,23 +39,7 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	logger.Info().Msg("Worker Service Started. Checking for jobs...")
-
-	// This is the infinite loop that keeps our worker alive
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				// Wake up and work!
-				notificationWorker.ProcessNextBatch(ctx)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	go notificationWorker.Start(ctx)
 
 	// Wait for someone to kill the process (Ctrl+C)
 	<-quit

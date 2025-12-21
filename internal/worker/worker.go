@@ -6,21 +6,50 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hascho/go-incident-dashboard-api/internal/queue"
 	"github.com/hascho/go-incident-dashboard-api/internal/repository"
 	"github.com/rs/zerolog"
 )
 
 type NotificationWorker struct {
 	Repo   repository.JobRepository
+	Queue  queue.TaskQueue
 	Logger zerolog.Logger
 	ID     string
 }
 
-func NewNotificationWorker(repo repository.JobRepository, logger zerolog.Logger, id string) *NotificationWorker {
+func NewNotificationWorker(repo repository.JobRepository, q queue.TaskQueue, logger zerolog.Logger, id string) *NotificationWorker {
 	return &NotificationWorker{
 		Repo:   repo,
+		Queue:  q,
 		Logger: logger,
 		ID:     id,
+	}
+}
+
+func (w *NotificationWorker) Start(ctx context.Context) {
+	w.Logger.Info().Msg("Worker Service Started. Listening for Redis signals and polling DB...")
+
+	redisChan := w.Queue.Subscribe(ctx)
+
+	// Safety Ticker (Polling)
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case incidentID := <-redisChan:
+			w.Logger.Info().Str("incident_id", incidentID).Msg("Received instant signal from Redis")
+			// When we get a signal, we process everything pending
+			w.ProcessNextBatch(ctx)
+
+		case <-ticker.C:
+			w.Logger.Debug().Msg("Running scheduled safety poll...")
+			w.ProcessNextBatch(ctx)
+		}
 	}
 }
 
