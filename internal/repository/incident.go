@@ -15,6 +15,7 @@ type IncidentRepository interface {
 	GetAllIncidents(ctx context.Context) ([]*model.Incident, error)
 	UpdateIncident(ctx context.Context, incident *model.Incident) (*model.Incident, error)
 	DeleteIncident(ctx context.Context, id string) error
+	UpdateNotificationStatus(ctx context.Context, id string, status string) error
 }
 
 type incidentRepository struct {
@@ -161,4 +162,13 @@ func (r *incidentRepository) DeleteIncident(ctx context.Context, id string) erro
 	}
 
 	return nil
+}
+
+func (r *incidentRepository) UpdateNotificationStatus(ctx context.Context, id string, status string) error {
+	query := `
+		UPDATE incidents
+		SET notification_status = $2, updated_at = NOW()
+		WHERE id = $1`
+	_, err := r.DB.ExecContext(ctx, query, id, status)
+	return err
 }

@@ -29,7 +29,9 @@ func main() {
 	logger.Info().Msg("Worker connected to Redis")
 
 	jobRepo := repository.NewJobRepository(dbConn)
-	notificationWorker := worker.NewNotificationWorker(jobRepo, taskQueue, logger, "worker-01")
+	incidentRepo := repository.NewIncidentRepository(dbConn)
+
+	notificationWorker := worker.NewNotificationWorker(jobRepo, incidentRepo, taskQueue, logger, "worker-01")
 
 	// The Heartbeat (Polling Loop)
 	ctx, cancel := context.WithCancel(context.Background())

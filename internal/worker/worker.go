@@ -12,18 +12,20 @@ import (
 )
 
 type NotificationWorker struct {
-	Repo   repository.JobRepository
-	Queue  queue.TaskQueue
-	Logger zerolog.Logger
-	ID     string
+	JobRepo      repository.JobRepository
+	IncidentRepo repository.IncidentRepository
+	Queue        queue.TaskQueue
+	Logger       zerolog.Logger
+	ID           string
 }
 
-func NewNotificationWorker(repo repository.JobRepository, q queue.TaskQueue, logger zerolog.Logger, id string) *NotificationWorker {
+func NewNotificationWorker(jobRepo repository.JobRepository, incidentRepo repository.IncidentRepository, q queue.TaskQueue, logger zerolog.Logger, id string) *NotificationWorker {
 	return &NotificationWorker{
-		Repo:   repo,
-		Queue:  q,
-		Logger: logger,
-		ID:     id,
+		JobRepo:      jobRepo,
+		IncidentRepo: incidentRepo,
+		Queue:        q,
+		Logger:       logger,
+		ID:           id,
 	}
 }
 
@@ -54,7 +56,7 @@ func (w *NotificationWorker) Start(ctx context.Context) {
 }
 
 func (w *NotificationWorker) ProcessNextBatch(ctx context.Context) {
-	jobs, err := w.Repo.FetchPendingJobs(ctx, 5)
+	jobs, err := w.JobRepo.FetchPendingJobs(ctx, 5)
 	if err != nil {
 		w.Logger.Error().Err(err).Msg("Worker failed to fetch jobs")
 		return
@@ -79,20 +81,28 @@ func (w *NotificationWorker) processJob(ctx context.Context, job *repository.Job
 		w.Logger.Warn().Err(err).Interface("job_id", job.ID).Msg("Notification failed, attempting retry logic")
 
 		// This will increment retries and move status to FAILED or PERMANENTLY_FAILED
-		retryErr := w.Repo.FailJobWithRetry(ctx, job.ID, 3)
+		retryErr := w.JobRepo.FailJobWithRetry(ctx, job.ID, 3)
 		if retryErr != nil {
 			w.Logger.Error().Err(retryErr).Msg("Critical: Could not update failure status in database")
 		}
 		return
 	}
 
-	err = w.Repo.UpdateJobStatus(ctx, job.ID, "SUCCESS")
+	err = w.JobRepo.UpdateJobStatus(ctx, job.ID, "SUCCESS")
 	if err != nil {
 		w.Logger.Error().Err(err).Interface("job_id", job.ID).Msg("Failed to update job status to SUCCESS")
 		return
 	}
 
-	w.Logger.Info().Interface("job_id", job.ID).Msg("Successfully processed notification")
+	err = w.IncidentRepo.UpdateNotificationStatus(ctx, job.IncidentID.String(), "sent")
+	if err != nil {
+		w.Logger.Error().Err(err).Msg("Failed to update incident notification status")
+	}
+
+	w.Logger.Info().
+		Interface("job_id", job.ID).
+		Interface("incident_id", job.IncidentID).
+		Msg("Successfully processed notification and updated incident status")
 }
 
 // Helper to simulate real work that might fail
